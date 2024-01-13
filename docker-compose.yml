@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - 9090:9090
+    volumes:
+      - prometheus:/prometheus
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    networks:
+      - owner
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - '8080:8080'
+    volumes:
+      - ./src:/app/src
+    networks:
+      - owner
+    depends_on:
+      test_owner_db:
+        condition: service_healthy
+
+  test_owner_db:
+    image: postgres:14.9
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U test_owner" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - '5432:5432'
+    environment:
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - test_owner_db:/data
+    networks:
+      - owner
+
+
+networks:
+  owner:
+    name: owner
+    driver: bridge
+
+volumes:
+  test_owner_db:
+    driver: local
+  prometheus:
+    driver: local
